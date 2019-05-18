@@ -19,7 +19,7 @@ require (
 	github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20181208011959-62db1d66dafa
 	github.com/argoproj/argo v2.2.1+incompatible
 	github.com/aws/aws-sdk-go v1.16.17
-	github.com/cortexlabs/yaml v0.0.0-20190507184340-e77913b76e51
+	github.com/cortexlabs/yaml v0.0.0-20190518203634-2edc63605737
 	github.com/davecgh/go-spew v1.1.1
 	github.com/emicklei/go-restful v2.8.0+incompatible // indirect
 	github.com/go-openapi/spec v0.18.0 // indirect

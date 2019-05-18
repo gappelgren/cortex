@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cortexlabs/cortex/pkg/consts"
+	"github.com/cortexlabs/yaml"
 )
 
 var emptyTime time.Time
@@ -219,7 +219,7 @@ func strIndent(val interface{}, indent string, currentIndent string, newlineChar
 		var t string
 		casted := value.Convert(reflect.TypeOf(t)).Interface().(string)
 
-		casted, _ = consts.UnescapeCortexResourceName(casted)
+		casted, _ = yaml.UnescapeAtSymbol(casted)
 
 		switch val.(type) {
 		case json.Number:

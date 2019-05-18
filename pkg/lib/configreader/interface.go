@@ -17,7 +17,8 @@ limitations under the License.
 package configreader
 
 import (
-	"github.com/cortexlabs/cortex/pkg/consts"
+	"github.com/cortexlabs/yaml"
+
 	"github.com/cortexlabs/cortex/pkg/lib/cast"
 	"github.com/cortexlabs/cortex/pkg/lib/errors"
 	"github.com/cortexlabs/cortex/pkg/lib/maps"
@@ -83,7 +84,7 @@ func validateInterface(val interface{}, v *InterfaceValidation) (interface{}, er
 
 func checkNoCortexResources(obj interface{}) error {
 	if objStr, ok := obj.(string); ok {
-		if resourceName, ok := consts.ExtractCortexResourceName(objStr); ok {
+		if resourceName, ok := yaml.ExtractAtSymbolText(objStr); ok {
 			return ErrorCortexResourceNotAllowed(resourceName)
 		}
 	}

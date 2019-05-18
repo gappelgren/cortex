@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cortexlabs/cortex/pkg/consts"
 	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 )
 
@@ -305,6 +304,6 @@ func ErrorMustBeEmpty() error {
 func ErrorCortexResourceNotAllowed(resourceName string) error {
 	return Error{
 		Kind:    ErrCortexResourceNotAllowed,
-		message: fmt.Sprintf("%s: cortex resource references are not allowed in this context", consts.AddCortexResourceIdentifier(resourceName)),
+		message: fmt.Sprintf("@%s: cortex resource references are not allowed in this context", resourceName),
 	}
 }

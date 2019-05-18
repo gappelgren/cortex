@@ -17,7 +17,8 @@ limitations under the License.
 package context
 
 import (
-	"github.com/cortexlabs/cortex/pkg/consts"
+	"github.com/cortexlabs/yaml"
+
 	"github.com/cortexlabs/cortex/pkg/lib/sets/strset"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 )
@@ -177,7 +178,7 @@ func (ctx *Context) extractCortexResourcesHelper(
 	resources map[string]Resource,
 ) {
 
-	if resourceName, ok := consts.ExtractCortexResourceName(input); ok {
+	if resourceName, ok := yaml.ExtractAtSymbolText(input); ok {
 		for _, res := range AllResourcesByName(resourceName) {
 			if len(resourceTypeMap) == 0 || resourceTypeMap[res.GetType()] == true {
 				resources[res.GetID()] = res

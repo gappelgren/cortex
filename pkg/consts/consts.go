@@ -18,7 +18,6 @@ package consts
 
 import (
 	"regexp"
-	"strings"
 )
 
 var (
@@ -59,25 +58,3 @@ var (
 
 	TelemetryURL = "https://telemetry.cortexlabs.dev"
 )
-
-const cortexResourceEscapeSeq = "🌝🌝🌝🌝🌝"
-
-func ExtractCortexResourceName(input interface{}) (string, bool) {
-	if inputStr, ok := input.(string); ok {
-		if strings.HasPrefix(inputStr, cortexResourceEscapeSeq) {
-			return inputStr[len(cortexResourceEscapeSeq):], true
-		}
-	}
-	return "", false
-}
-
-func UnescapeCortexResourceName(inputStr string) (string, bool) {
-	if strings.HasPrefix(inputStr, cortexResourceEscapeSeq) {
-		return "@" + inputStr[len(cortexResourceEscapeSeq):], true
-	}
-	return inputStr, false
-}
-
-func AddCortexResourceIdentifier(resourceName string) string {
-	return "@" + resourceName
-}
