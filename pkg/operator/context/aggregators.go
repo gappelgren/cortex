@@ -166,6 +166,7 @@ func getAggregators(
 		if _, ok := aggregators[aggregateConfig.Aggregator]; ok {
 			continue
 		}
+
 		aggregator, err := getAggregator(aggregateConfig.Aggregator, userAggregators)
 		if err != nil {
 			return nil, errors.Wrap(err, userconfig.Identify(aggregateConfig), userconfig.AggregatorKey)

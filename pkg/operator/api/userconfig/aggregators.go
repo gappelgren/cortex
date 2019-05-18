@@ -71,6 +71,7 @@ func (aggregators Aggregators) Validate() error {
 	if len(dups) > 0 {
 		return ErrorDuplicateResourceName(dups...)
 	}
+
 	return nil
 }
 

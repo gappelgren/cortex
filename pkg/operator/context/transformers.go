@@ -73,9 +73,11 @@ func loadUserTransformers(
 		if err != nil {
 			return nil, err
 		}
+
 		transColConfig.Transformer = transformer.Name
 		userTransformers[transformer.Name] = transformer
 	}
+
 	return userTransformers, nil
 }
 
@@ -92,6 +94,7 @@ func newTransformer(
 	buf.WriteString(context.DataTypeID(transConfig.Inputs))
 	buf.WriteString(context.DataTypeID(transConfig.OutputType))
 	buf.WriteString(implID)
+
 	for _, pythonPackage := range pythonPackages {
 		buf.WriteString(pythonPackage.GetID())
 	}
@@ -143,6 +146,7 @@ func getTransformer(
 	name string,
 	userTransformers map[string]*context.Transformer,
 ) (*context.Transformer, error) {
+
 	if transformer, ok := builtinTransformers[name]; ok {
 		return transformer, nil
 	}
