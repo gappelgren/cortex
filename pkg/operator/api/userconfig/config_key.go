@@ -36,6 +36,11 @@ const (
 	PathKey            = "path"
 	ValueKey           = "value"
 	YAMLKey            = "yaml"
+	OutputTypeKey      = "output_type"
+	OptionalOptKey     = "_optional"
+	DefaultOptKey      = "_default"
+	MinCountOptKey     = "_min_count"
+	MaxCountOptKey     = "_max_count"
 
 	// environment
 	LimitKey          = "limit"

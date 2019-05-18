@@ -25,9 +25,9 @@ type Transformers []*Transformer
 
 type Transformer struct {
 	ResourceFields
-	Inputs     *Inputs    `json:"inputs"  yaml:"inputs"`
-	OutputType ColumnType `json:"output_type"  yaml:"output_type"`
-	Path       string     `json:"path"  yaml:"path"`
+	Input      *InputSchema `json:"input" yaml:"input"`
+	OutputType ColumnType   `json:"output_type"  yaml:"output_type"`
+	Path       string       `json:"path"  yaml:"path"`
 }
 
 var transformerValidation = &cr.StructValidation{
@@ -57,7 +57,7 @@ var transformerValidation = &cr.StructValidation{
 				return ColumnTypeFromString(str), nil
 			},
 		},
-		inputTypesFieldValidation,
+		inputSchemaFieldValidation,
 		typeFieldValidation,
 	},
 }

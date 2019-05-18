@@ -17,8 +17,6 @@ limitations under the License.
 package userconfig
 
 import (
-	"sort"
-
 	"github.com/cortexlabs/cortex/pkg/lib/configreader"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 )
@@ -29,7 +27,7 @@ type TransformedColumn struct {
 	ResourceFields
 	Transformer     string        `json:"transformer" yaml:"transformer"`
 	TransformerPath *string       `json:"transformer_path" yaml:"transformer_path"`
-	Inputs          *Inputs       `json:"inputs" yaml:"inputs"`
+	Input           interface{}   `json:"input" yaml:"input"`
 	Compute         *SparkCompute `json:"compute" yaml:"compute"`
 	Tags            Tags          `json:"tags" yaml:"tags"`
 }
@@ -54,7 +52,7 @@ var transformedColumnValidation = &configreader.StructValidation{
 			StructField:         "TransformerPath",
 			StringPtrValidation: &configreader.StringPtrValidation{},
 		},
-		inputValuesFieldValidation,
+		inputValueFieldValidation,
 		sparkComputeFieldValidation("Compute"),
 		tagsFieldValidation,
 		typeFieldValidation,
@@ -98,10 +96,4 @@ func (columns TransformedColumns) Get(name string) *TransformedColumn {
 		}
 	}
 	return nil
-}
-
-func (column *TransformedColumn) InputColumnNames() []string {
-	inputs, _ := configreader.FlattenAllStrValues(column.Inputs.Columns)
-	sort.Strings(inputs)
-	return inputs
 }

@@ -20,65 +20,20 @@ import (
 	cr "github.com/cortexlabs/cortex/pkg/lib/configreader"
 )
 
-type Inputs struct {
-	Columns map[string]interface{} `json:"columns" yaml:"columns"`
-	Args    map[string]interface{} `json:"args" yaml:"args"`
-}
-
-var inputTypesFieldValidation = &cr.StructFieldValidation{
-	StructField: "Inputs",
-	StructValidation: &cr.StructValidation{
+var inputSchemaFieldValidation = &cr.StructFieldValidation{
+	StructField: "Input",
+	InterfaceValidation: &cr.InterfaceValidation{
 		Required: true,
-		StructFieldValidations: []*cr.StructFieldValidation{
-			{
-				StructField: "Columns",
-				InterfaceMapValidation: &cr.InterfaceMapValidation{
-					AllowEmpty: true,
-					Default:    make(map[string]interface{}),
-					Validator: func(columnTypes map[string]interface{}) (map[string]interface{}, error) {
-						return columnTypes, ValidateColumnInputTypes(columnTypes)
-					},
-				},
-			},
-			{
-				StructField: "Args",
-				InterfaceMapValidation: &cr.InterfaceMapValidation{
-					AllowEmpty: true,
-					Default:    make(map[string]interface{}),
-					Validator: func(argTypes map[string]interface{}) (map[string]interface{}, error) {
-						return argTypes, ValidateArgTypes(argTypes)
-					},
-				},
-			},
+		Validator: func(inputSchemaInter interface{}) (interface{}, error) {
+			return ValidateInputSchema(inputSchemaInter) // This casts it to *InputSchema
 		},
 	},
 }
 
-var inputValuesFieldValidation = &cr.StructFieldValidation{
-	StructField: "Inputs",
-	StructValidation: &cr.StructValidation{
-		Required: true,
-		StructFieldValidations: []*cr.StructFieldValidation{
-			{
-				StructField: "Columns",
-				InterfaceMapValidation: &cr.InterfaceMapValidation{
-					AllowEmpty: true,
-					Default:    make(map[string]interface{}),
-					Validator: func(columnInputValues map[string]interface{}) (map[string]interface{}, error) {
-						return columnInputValues, ValidateColumnInputValues(columnInputValues)
-					},
-				},
-			},
-			{
-				StructField: "Args",
-				InterfaceMapValidation: &cr.InterfaceMapValidation{
-					AllowEmpty: true,
-					Default:    make(map[string]interface{}),
-					Validator: func(argValues map[string]interface{}) (map[string]interface{}, error) {
-						return argValues, ValidateArgValues(argValues)
-					},
-				},
-			},
-		},
+var inputValueFieldValidation = &cr.StructFieldValidation{
+	StructField: "Input",
+	InterfaceValidation: &cr.InterfaceValidation{
+		Required:             true,
+		AllowCortexResources: true,
 	},
 }

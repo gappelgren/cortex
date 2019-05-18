@@ -45,6 +45,7 @@ type Config struct {
 	Constants          Constants          `json:"constants" yaml:"constants"`
 	Templates          Templates          `json:"templates" yaml:"templates"`
 	Embeds             Embeds             `json:"embeds" yaml:"embeds"`
+	Resources          map[string][]Resource
 }
 
 var typeFieldValidation = &cr.StructFieldValidation{
@@ -145,9 +146,23 @@ func (config *Config) Validate(envName string) error {
 		return ErrorUndefinedConfig(resource.AppType)
 	}
 
-	err = config.ValidateColumns()
-	if err != nil {
-		return err
+	// Check for duplicate names across types that must have unique names
+	var resources []Resource
+	for _, res := range config.RawColumns {
+		resources = append(resources, res)
+	}
+	for _, res := range config.TransformedColumns {
+		resources = append(resources, res)
+	}
+	for _, res := range config.Constants {
+		resources = append(resources, res)
+	}
+	for _, res := range config.Aggregates {
+		resources = append(resources, res)
+	}
+	dups := FindDuplicateResourceName(resources...)
+	if len(dups) > 0 {
+		return ErrorDuplicateResourceName(dups...)
 	}
 
 	// Check ingested columns match raw columns
@@ -385,6 +400,10 @@ func newPartial(configData interface{}, filePath string, emb *Embed, template *T
 			newResource.SetIndex(i)
 			newResource.SetFilePath(filePath)
 			newResource.SetEmbed(emb)
+			if config.Resources == nil {
+				config.Resources = make(map[string][]Resource)
+			}
+			config.Resources[newResource.GetName()] = append(config.Resources[newResource.GetName()], newResource)
 		}
 	}
 

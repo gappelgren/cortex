@@ -23,7 +23,6 @@ import (
 	"github.com/cortexlabs/cortex/pkg/consts"
 	"github.com/cortexlabs/cortex/pkg/lib/errors"
 	"github.com/cortexlabs/cortex/pkg/lib/hash"
-	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 	"github.com/cortexlabs/cortex/pkg/operator/api/context"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
@@ -34,6 +33,7 @@ func getTransformedColumns(
 	constants context.Constants,
 	rawColumns context.RawColumns,
 	aggregates context.Aggregates,
+	userAggregators map[string]*context.Aggregator,
 	userTransformers map[string]*context.Transformer,
 	root string,
 ) (context.TransformedColumns, error) {
@@ -46,32 +46,38 @@ func getTransformedColumns(
 			return nil, errors.Wrap(err, userconfig.Identify(transformedColumnConfig), userconfig.TransformerKey)
 		}
 
-		err = validateTransformedColumnInputs(transformedColumnConfig, constants, rawColumns, aggregates, transformer)
-		if err != nil {
-			return nil, errors.WithStack(err)
+		validResources := make(map[string]context.Resource)
+		for name, res := range constants {
+			validResources[name] = res
+		}
+		for name, res := range rawColumns {
+			validResources[name] = res
+		}
+		for name, res := range aggregates {
+			validResources[name] = res
 		}
 
-		valueResourceIDMap := make(map[string]string, len(transformedColumnConfig.Inputs.Args))
-		valueResourceIDWithTagsMap := make(map[string]string, len(transformedColumnConfig.Inputs.Args))
-		for argName, resourceName := range transformedColumnConfig.Inputs.Args {
-			resourceNameStr := resourceName.(string)
-			resource, err := context.GetValueResource(resourceNameStr, constants, aggregates)
-			if err != nil {
-				return nil, errors.Wrap(err, userconfig.Identify(transformedColumnConfig), userconfig.InputsKey, userconfig.ArgsKey, argName)
-			}
-			valueResourceIDMap[argName] = resource.GetID()
-			valueResourceIDWithTagsMap[argName] = resource.GetIDWithTags()
+		castedInput, inputID, inputIDWithTags, err := ValidateInput(
+			transformedColumnConfig.Input,
+			transformer.Input,
+			[]resource.Type{resource.RawColumnType, resource.ConstantType, resource.AggregateType},
+			validResources,
+			config.Resources,
+			userAggregators,
+			userTransformers,
+		)
+		if err != nil {
+			return errors.Wrap(err, userconfig.Identify(transformedColumnConfig), userconfig.InputKey)
 		}
+		transformedColumnConfig.Input = castedInput
 
 		var buf bytes.Buffer
-		buf.WriteString(rawColumns.ColumnInputsID(transformedColumnConfig.Inputs.Columns))
-		buf.WriteString(s.Obj(valueResourceIDMap))
+		buf.WriteString(inputID)
 		buf.WriteString(transformer.ID)
 		id := hash.Bytes(buf.Bytes())
 
 		buf.Reset()
-		buf.WriteString(rawColumns.ColumnInputsIDWithTags(transformedColumnConfig.Inputs.Columns))
-		buf.WriteString(s.Obj(valueResourceIDWithTagsMap))
+		buf.WriteString(inputIDWithTags)
 		buf.WriteString(transformer.IDWithTags)
 		buf.WriteString(transformedColumnConfig.Tags.ID())
 		idWithTags := hash.Bytes(buf.Bytes())

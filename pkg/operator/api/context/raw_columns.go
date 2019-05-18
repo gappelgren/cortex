@@ -17,8 +17,6 @@ limitations under the License.
 package context
 
 import (
-	"github.com/cortexlabs/cortex/pkg/lib/cast"
-	"github.com/cortexlabs/cortex/pkg/lib/hash"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
 )
 
@@ -52,39 +50,6 @@ func (rawColumns RawColumns) OneByID(id string) RawColumn {
 		}
 	}
 	return nil
-}
-
-func (rawColumns RawColumns) columnInputsID(columnInputValues map[string]interface{}, includeTags bool) string {
-	columnIDMap := make(map[string]string)
-	for columnInputName, columnInputValue := range columnInputValues {
-		if columnName, ok := columnInputValue.(string); ok {
-			if includeTags {
-				columnIDMap[columnInputName] = rawColumns[columnName].GetIDWithTags()
-			} else {
-				columnIDMap[columnInputName] = rawColumns[columnName].GetID()
-			}
-		}
-		if columnNames, ok := cast.InterfaceToStrSlice(columnInputValue); ok {
-			var columnIDs string
-			for _, columnName := range columnNames {
-				if includeTags {
-					columnIDs = columnIDs + rawColumns[columnName].GetIDWithTags()
-				} else {
-					columnIDs = columnIDs + rawColumns[columnName].GetID()
-				}
-			}
-			columnIDMap[columnInputName] = columnIDs
-		}
-	}
-	return hash.Any(columnIDMap)
-}
-
-func (rawColumns RawColumns) ColumnInputsID(columnInputValues map[string]interface{}) string {
-	return rawColumns.columnInputsID(columnInputValues, false)
-}
-
-func (rawColumns RawColumns) ColumnInputsIDWithTags(columnInputValues map[string]interface{}) string {
-	return rawColumns.columnInputsID(columnInputValues, true)
 }
 
 func (rawColumn *RawIntColumn) GetInputRawColumnNames() []string {

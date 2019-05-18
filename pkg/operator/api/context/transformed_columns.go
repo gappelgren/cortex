@@ -18,7 +18,6 @@ package context
 
 import (
 	"github.com/cortexlabs/cortex/pkg/lib/cast"
-	"github.com/cortexlabs/cortex/pkg/lib/sets/strset"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
 )
 
@@ -40,16 +39,6 @@ func (column *TransformedColumn) Args() map[string]string {
 	return args
 }
 
-func (column *TransformedColumn) InputAggregateNames(ctx *Context) strset.Set {
-	inputAggregateNames := strset.New()
-	for _, valueResourceName := range column.Args() {
-		if _, ok := ctx.Aggregates[valueResourceName]; ok {
-			inputAggregateNames.Add(valueResourceName)
-		}
-	}
-	return inputAggregateNames
-}
-
 func (columns TransformedColumns) OneByID(id string) *TransformedColumn {
 	for _, transformedColumn := range columns {
 		if transformedColumn.ID == id {
@@ -57,8 +46,4 @@ func (columns TransformedColumns) OneByID(id string) *TransformedColumn {
 		}
 	}
 	return nil
-}
-
-func (column *TransformedColumn) GetInputRawColumnNames() []string {
-	return column.InputColumnNames()
 }

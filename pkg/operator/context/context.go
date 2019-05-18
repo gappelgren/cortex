@@ -140,12 +140,7 @@ func New(
 		return nil, err
 	}
 
-	err = autoGenerateConfig(userconf, userAggregators, userTransformers)
-	if err != nil {
-		return nil, err
-	}
-
-	constants, err := loadConstants(userconf.Constants)
+	constants, err := getConstants(userconf.Constants)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +170,7 @@ func New(
 	}
 	ctx.Aggregates = aggregates
 
-	transformedColumns, err := getTransformedColumns(userconf, constants, rawColumns, ctx.Aggregates, userTransformers, ctx.Root)
+	transformedColumns, err := getTransformedColumns(userconf, constants, rawColumns, ctx.Aggregates, userAggregators, userTransformers, ctx.Root)
 	if err != nil {
 		return nil, err
 	}

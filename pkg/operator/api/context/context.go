@@ -107,8 +107,8 @@ func (r *ComputedResourceFields) SetWorkloadID(workloadID string) {
 
 func ExtractResourceWorkloadIDs(resources []ComputedResource) map[string]string {
 	resourceWorkloadIDs := make(map[string]string, len(resources))
-	for _, resource := range resources {
-		resourceWorkloadIDs[resource.GetID()] = resource.GetWorkloadID()
+	for _, res := range resources {
+		resourceWorkloadIDs[res.GetID()] = res.GetWorkloadID()
 	}
 	return resourceWorkloadIDs
 }
@@ -149,8 +149,8 @@ func (ctx *Context) ComputedResources() []ComputedResource {
 
 func (ctx *Context) AllResources() []Resource {
 	var resources []Resource
-	for _, resource := range ctx.ComputedResources() {
-		resources = append(resources, resource)
+	for _, res := range ctx.ComputedResources() {
+		resources = append(resources, res)
 	}
 	for _, constant := range ctx.Constants {
 		resources = append(resources, constant)
@@ -165,9 +165,9 @@ func (ctx *Context) AllResources() []Resource {
 }
 
 func (ctx *Context) ComputedResourceIDs() strset.Set {
-	resourceIDs := make(strset.Set)
-	for _, resource := range ctx.ComputedResources() {
-		resourceIDs.Add(resource.GetID())
+	resourceIDs := strset.New()
+	for _, res := range ctx.ComputedResources() {
+		resourceIDs.Add(res.GetID())
 	}
 	return resourceIDs
 }
@@ -194,27 +194,37 @@ func (ctx *Context) ComputedResourceWorkloadIDs() strset.Set {
 
 // Note: there may be >1 resources with the ID, this returns one of them
 func (ctx *Context) OneResourceByID(resourceID string) Resource {
-	for _, resource := range ctx.AllResources() {
-		if resource.GetID() == resourceID {
-			return resource
+	for _, res := range ctx.AllResources() {
+		if res.GetID() == resourceID {
+			return res
 		}
 	}
 	return nil
 }
 
+func (ctx *Context) AllResourcesByName(name string) []Resource {
+	var resources []Resource
+	for _, res := range ctx.AllResources() {
+		if res.GetName() == name {
+			resources = append(resources, res)
+		}
+	}
+	return resources
+}
+
 // Overwrites any existing workload IDs
 func (ctx *Context) PopulateWorkloadIDs(resourceWorkloadIDs map[string]string) {
-	for _, resource := range ctx.ComputedResources() {
-		if workloadID, ok := resourceWorkloadIDs[resource.GetID()]; ok {
-			resource.SetWorkloadID(workloadID)
+	for _, res := range ctx.ComputedResources() {
+		if workloadID, ok := resourceWorkloadIDs[res.GetID()]; ok {
+			res.SetWorkloadID(workloadID)
 		}
 	}
 }
 
 func (ctx *Context) CheckAllWorkloadIDsPopulated() error {
-	for _, resource := range ctx.ComputedResources() {
-		if resource.GetWorkloadID() == "" {
-			return errors.New(ctx.App.Name, "resource", resource.GetID(), "workload ID is missing") // unexpected
+	for _, res := range ctx.ComputedResources() {
+		if res.GetWorkloadID() == "" {
+			return errors.New(ctx.App.Name, "resource", res.GetID(), "workload ID is missing") // unexpected
 		}
 	}
 	return nil

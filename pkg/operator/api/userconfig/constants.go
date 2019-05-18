@@ -45,7 +45,7 @@ var constantValidation = &cr.StructValidation{
 			InterfaceValidation: &cr.InterfaceValidation{
 				Required: true,
 				Validator: func(t interface{}) (interface{}, error) {
-					return t, ValidateValueType(t)
+					return ValidateOutputTypeSchema(t)
 				},
 			},
 		},
@@ -53,9 +53,6 @@ var constantValidation = &cr.StructValidation{
 			StructField: "Value",
 			InterfaceValidation: &cr.InterfaceValidation{
 				Required: true,
-				Validator: func(value interface{}) (interface{}, error) {
-					return value, ValidateValue(value)
-				},
 			},
 		},
 		tagsFieldValidation,
@@ -84,7 +81,7 @@ func (constants Constants) Validate() error {
 }
 
 func (constant *Constant) Validate() error {
-	castedValue, err := CastValue(constant.Value, constant.Type)
+	castedValue, err := CastConstant(constant.Value, constant.Type)
 	if err != nil {
 		return errors.Wrap(err, Identify(constant), ValueKey)
 	}

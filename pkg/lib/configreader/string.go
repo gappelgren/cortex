@@ -37,6 +37,7 @@ type StringValidation struct {
 	AlphaNumericDashDotUnderscore        bool
 	AlphaNumericDashUnderscore           bool
 	DNS1035                              bool
+	AllowCortexResources                 bool
 	Validator                            func(string) (string, error)
 }
 
@@ -161,6 +162,12 @@ func ValidateString(val string, v *StringValidation) (string, error) {
 }
 
 func ValidateStringVal(val string, v *StringValidation) error {
+	if !v.AllowCortexResources {
+		if err := checkNoCortexResources(val); err != nil {
+			return err
+		}
+	}
+
 	if !v.AllowEmpty {
 		if len(val) == 0 {
 			return ErrorCannotBeEmpty()

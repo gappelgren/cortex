@@ -23,7 +23,6 @@ import (
 	"github.com/cortexlabs/cortex/pkg/consts"
 	"github.com/cortexlabs/cortex/pkg/lib/errors"
 	"github.com/cortexlabs/cortex/pkg/lib/hash"
-	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 	"github.com/cortexlabs/cortex/pkg/operator/api/context"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
@@ -40,42 +39,40 @@ func getAggregates(
 	aggregates := context.Aggregates{}
 
 	for _, aggregateConfig := range config.Aggregates {
-		if _, ok := constants[aggregateConfig.Name]; ok {
-			return nil, userconfig.ErrorDuplicateResourceName(aggregateConfig, constants[aggregateConfig.Name])
-		}
-
 		aggregator, err := getAggregator(aggregateConfig.Aggregator, userAggregators)
 		if err != nil {
 			return nil, errors.Wrap(err, userconfig.Identify(aggregateConfig), userconfig.AggregatorKey)
 		}
 
-		err = validateAggregateInputs(aggregateConfig, constants, rawColumns, aggregator)
-		if err != nil {
-			return nil, errors.WithStack(err)
+		validResources := make(map[string]context.Resource)
+		for name, res := range constants {
+			validResources[name] = res
+		}
+		for name, res := range rawColumns {
+			validResources[name] = res
 		}
 
-		constantIDMap := make(map[string]string, len(aggregateConfig.Inputs.Args))
-		constantIDWithTagsMap := make(map[string]string, len(aggregateConfig.Inputs.Args))
-		for argName, constantName := range aggregateConfig.Inputs.Args {
-			constantNameStr := constantName.(string)
-			constant, ok := constants[constantNameStr]
-			if !ok {
-				return nil, errors.Wrap(userconfig.ErrorUndefinedResource(constantNameStr, resource.ConstantType),
-					userconfig.Identify(aggregateConfig), userconfig.InputsKey, userconfig.ArgsKey, argName)
-			}
-			constantIDMap[argName] = constant.ID
-			constantIDWithTagsMap[argName] = constant.IDWithTags
+		castedInput, inputID, inputIDWithTags, err := ValidateInput(
+			aggregateConfig.Input,
+			aggregator.Input,
+			[]resource.Type{resource.RawColumnType, resource.ConstantType},
+			validResources,
+			config.Resources,
+			userAggregators,
+			nil,
+		)
+		if err != nil {
+			return errors.Wrap(err, userconfig.Identify(aggregateConfig), userconfig.InputKey)
 		}
+		aggregateConfig.Input = castedInput
 
 		var buf bytes.Buffer
-		buf.WriteString(rawColumns.ColumnInputsID(aggregateConfig.Inputs.Columns))
-		buf.WriteString(s.Obj(constantIDMap))
+		buf.WriteString(inputID)
 		buf.WriteString(aggregator.ID)
 		id := hash.Bytes(buf.Bytes())
 
 		buf.Reset()
-		buf.WriteString(rawColumns.ColumnInputsIDWithTags(aggregateConfig.Inputs.Columns))
-		buf.WriteString(s.Obj(constantIDWithTagsMap))
+		buf.WriteString(inputIDWithTags)
 		buf.WriteString(aggregator.IDWithTags)
 		buf.WriteString(aggregateConfig.Tags.ID())
 		idWithTags := hash.Bytes(buf.Bytes())

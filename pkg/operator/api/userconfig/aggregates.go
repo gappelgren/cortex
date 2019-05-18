@@ -17,8 +17,6 @@ limitations under the License.
 package userconfig
 
 import (
-	"sort"
-
 	"github.com/cortexlabs/cortex/pkg/lib/configreader"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 )
@@ -29,7 +27,7 @@ type Aggregate struct {
 	ResourceFields
 	Aggregator     string        `json:"aggregator" yaml:"aggregator"`
 	AggregatorPath *string       `json:"aggregator_path" yaml:"aggregator_path"`
-	Inputs         *Inputs       `json:"inputs" yaml:"inputs"`
+	Input          interface{}   `json:"input" yaml:"input"`
 	Compute        *SparkCompute `json:"compute" yaml:"compute"`
 	Tags           Tags          `json:"tags" yaml:"tags"`
 }
@@ -54,7 +52,7 @@ var aggregateValidation = &configreader.StructValidation{
 			StructField:         "AggregatorPath",
 			StringPtrValidation: &configreader.StringPtrValidation{},
 		},
-		inputValuesFieldValidation,
+		inputValueFieldValidation,
 		sparkComputeFieldValidation("Compute"),
 		tagsFieldValidation,
 		typeFieldValidation,
@@ -93,10 +91,4 @@ func (aggregates Aggregates) Get(name string) *Aggregate {
 		}
 	}
 	return nil
-}
-
-func (aggregate *Aggregate) InputColumnNames() []string {
-	inputs, _ := configreader.FlattenAllStrValues(aggregate.Inputs.Columns)
-	sort.Strings(inputs)
-	return inputs
 }

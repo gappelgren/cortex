@@ -21,316 +21,160 @@ import (
 
 	"github.com/cortexlabs/cortex/pkg/lib/cast"
 	"github.com/cortexlabs/cortex/pkg/lib/configreader"
+	cr "github.com/cortexlabs/cortex/pkg/lib/configreader"
 	"github.com/cortexlabs/cortex/pkg/lib/errors"
-	"github.com/cortexlabs/cortex/pkg/lib/maps"
-	"github.com/cortexlabs/cortex/pkg/lib/slices"
+	"github.com/cortexlabs/cortex/pkg/lib/pointer"
 	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 )
 
-func isValidColumnInputType(columnTypeStr string) bool {
-	for _, columnTypeStrItem := range strings.Split(columnTypeStr, "|") {
-		if !slices.HasString(ColumnTypeStrings(), columnTypeStrItem) {
-			return false
-		}
-	}
-	return true
-}
-
-func isValidValueType(valueTypeStr string) bool {
-	for _, valueTypeStrItem := range strings.Split(valueTypeStr, "|") {
-		if !slices.HasString(ValueTypeStrings(), valueTypeStrItem) {
-			return false
-		}
-	}
-	return true
-}
-
-func ValidateColumnInputTypes(columnTypes map[string]interface{}) error {
-	for columnInputName, columnType := range columnTypes {
-		if columnTypeStr, ok := columnType.(string); ok {
-			if !isValidColumnInputType(columnTypeStr) {
-				return errors.Wrap(ErrorInvalidColumnInputType(columnTypeStr), columnInputName)
+// Returns ValueType, length-one array of <recursive>, or map of {scalar|ValueType -> <recursive>}
+// Output types cannot have *_COLUMN types, cannot be compound types, and don't have cortex options (e.g. _default)
+// This is used for constants and aggregates
+func ValidateOutputTypeSchema(outputTypeSchemaInter interface{}) (interface{}, error) {
+	// String
+	if typeSchemaStr, ok := outputTypeSchemaInter.(string); ok {
+		valueType := ValueTypeFromString(typeSchemaStr)
+		if valueType == UnknownValueType {
+			if colType := ColumnTypeFromString(typeSchemaStr); colType != UnknownColumnType {
+				return nil, ErrorColumnTypeInOutputType(typeSchemaStr)
 			}
-			continue
-		}
-
-		if columnTypeStrs, ok := cast.InterfaceToStrSlice(columnType); ok {
-			if len(columnTypeStrs) != 1 {
-				return errors.Wrap(ErrorTypeListLength(columnTypeStrs), columnInputName)
+			if _, err := CompoundTypeFromString(typeSchemaStr); err == nil {
+				return nil, ErrorCompoundTypeInOutputType(typeSchemaStr)
 			}
-			if !isValidColumnInputType(columnTypeStrs[0]) {
-				return errors.Wrap(ErrorInvalidColumnInputType(columnTypeStrs), columnInputName)
-			}
-			continue
+			return nil, ErrorInvalidOutputType(typeSchemaStr)
 		}
-
-		return errors.Wrap(ErrorInvalidColumnInputType(columnType), columnInputName)
+		return valueType, nil
 	}
 
-	return nil
-}
-
-func ValidateColumnInputValues(columnInputValues map[string]interface{}) error {
-	for columnInputName, columnInputValue := range columnInputValues {
-		if _, ok := columnInputValue.(string); ok {
-			continue
+	// List
+	if typeSchemaSlice, ok := cast.InterfaceToInterfaceSlice(outputTypeSchemaInter); ok {
+		if len(typeSchemaSlice) != 1 {
+			return nil, ErrorTypeListLength(typeSchemaSlice)
 		}
-		if columnNames, ok := cast.InterfaceToStrSlice(columnInputValue); ok {
-			if columnNames == nil {
-				return errors.Wrap(configreader.ErrorCannotBeNull(), columnInputName)
-			}
-			continue
-		}
-		return errors.Wrap(
-			configreader.ErrorInvalidPrimitiveType(columnInputValue, configreader.PrimTypeString, configreader.PrimTypeStringList),
-			columnInputName,
-		)
-	}
-
-	return nil
-}
-
-func ValidateColumnRuntimeTypes(columnRuntimeTypes map[string]interface{}) error {
-	for columnInputName, columnTypeInter := range columnRuntimeTypes {
-		if columnType, ok := columnTypeInter.(ColumnType); ok {
-			if columnType == UnknownColumnType {
-				return errors.Wrap(ErrorInvalidColumnRuntimeType(), columnInputName) // unexpected
-			}
-			continue
-		}
-		if columnTypes, ok := columnTypeInter.([]ColumnType); ok {
-			for i, columnType := range columnTypes {
-				if columnType == UnknownColumnType {
-					return errors.Wrap(ErrorInvalidColumnRuntimeType(), columnInputName, s.Index(i)) // unexpected
-				}
-			}
-			continue
-		}
-		return errors.Wrap(ErrorInvalidColumnRuntimeType(), columnInputName) // unexpected
-	}
-
-	return nil
-}
-
-// columnRuntimeTypes is {string -> ColumnType or []ColumnType}, columnSchemaTypes is {string -> string or []string}
-func CheckColumnRuntimeTypesMatch(columnRuntimeTypes map[string]interface{}, columnSchemaTypes map[string]interface{}) error {
-	err := ValidateColumnInputTypes(columnSchemaTypes)
-	if err != nil {
-		return err
-	}
-	err = ValidateColumnRuntimeTypes(columnRuntimeTypes)
-	if err != nil {
-		return err
-	}
-
-	for columnInputName, columnSchemaType := range columnSchemaTypes {
-		if len(columnRuntimeTypes) == 0 {
-			return configreader.ErrorMapMustBeDefined(maps.InterfaceMapKeys(columnSchemaTypes)...)
-		}
-
-		columnRuntimeTypeInter, ok := columnRuntimeTypes[columnInputName]
-		if !ok {
-			return errors.Wrap(configreader.ErrorMustBeDefined(), columnInputName)
-		}
-
-		if columnSchemaTypeStr, ok := columnSchemaType.(string); ok {
-			validTypes := strings.Split(columnSchemaTypeStr, "|")
-			columnRuntimeType, ok := columnRuntimeTypeInter.(ColumnType)
-			if !ok {
-				return errors.Wrap(ErrorUnsupportedColumnType(columnRuntimeTypeInter, validTypes), columnInputName)
-			}
-			if !slices.HasString(validTypes, columnRuntimeType.String()) {
-				return errors.Wrap(ErrorUnsupportedColumnType(columnRuntimeType, validTypes), columnInputName)
-			}
-			continue
-		}
-
-		if columnSchemaTypeStrs, ok := cast.InterfaceToStrSlice(columnSchemaType); ok {
-			validTypes := strings.Split(columnSchemaTypeStrs[0], "|")
-			columnRuntimeTypeSlice, ok := columnRuntimeTypeInter.([]ColumnType)
-			if !ok {
-				return errors.Wrap(ErrorUnsupportedColumnType(columnRuntimeTypeInter, columnSchemaTypeStrs), columnInputName)
-			}
-			for i, columnRuntimeType := range columnRuntimeTypeSlice {
-				if !slices.HasString(validTypes, columnRuntimeType.String()) {
-					return errors.Wrap(ErrorUnsupportedColumnType(columnRuntimeType, validTypes), columnInputName, s.Index(i))
-				}
-			}
-			continue
-		}
-
-		return errors.Wrap(ErrorInvalidColumnInputType(columnSchemaType), columnInputName) // unexpected
-	}
-
-	for columnInputName := range columnRuntimeTypes {
-		if _, ok := columnSchemaTypes[columnInputName]; !ok {
-			return configreader.ErrorUnsupportedKey(columnInputName)
-		}
-	}
-
-	return nil
-}
-
-func ValidateArgTypes(argTypes map[string]interface{}) error {
-	for argName, valueType := range argTypes {
-		if isValidValueType(argName) {
-			return ErrorArgNameCannotBeType(argName)
-		}
-		err := ValidateValueType(valueType)
+		elementInputSchema, err := ValidateOutputTypeSchema(typeSchemaSlice[0])
 		if err != nil {
-			return errors.Wrap(err, argName)
+			return nil, errors.Wrap(err, s.Index(0))
 		}
-	}
-	return nil
-}
-
-func ValidateValueType(valueType interface{}) error {
-	if valueTypeStr, ok := valueType.(string); ok {
-		if !isValidValueType(valueTypeStr) {
-			return ErrorInvalidValueDataType(valueTypeStr)
-		}
-		return nil
+		return []interface{}{elementInputSchema}, nil
 	}
 
-	if valueTypeStrs, ok := cast.InterfaceToStrSlice(valueType); ok {
-		if len(valueTypeStrs) != 1 {
-			return errors.Wrap(ErrorTypeListLength(valueTypeStrs))
+	// Map
+	if typeSchemaMap, ok := cast.InterfaceToInterfaceInterfaceMap(outputTypeSchemaInter); ok {
+		if len(typeSchemaMap) == 0 {
+			return nil, ErrorTypeMapZeroLength(typeSchemaMap)
 		}
-		if !isValidValueType(valueTypeStrs[0]) {
-			return ErrorInvalidValueDataType(valueTypeStrs[0])
-		}
-		return nil
-	}
 
-	if valueTypeMap, ok := cast.InterfaceToInterfaceInterfaceMap(valueType); ok {
-		foundGenericKey := false
-		for key := range valueTypeMap {
-			if strKey, ok := key.(string); ok {
-				if isValidValueType(strKey) {
-					foundGenericKey = true
+		var typeKey ValueType
+		var typeValue interface{}
+		for k, v := range typeSchemaMap {
+			if kStr, ok := k.(string); ok {
+				typeKey = ValueTypeFromString(kStr)
+				if typeKey != UnknownValueType {
+					typeValue = v
 					break
 				}
-			}
-		}
-		if foundGenericKey && len(valueTypeMap) != 1 {
-			return ErrorGenericTypeMapLength(valueTypeMap)
-		}
-
-		for key, val := range valueTypeMap {
-			if foundGenericKey {
-				err := ValidateValueType(key)
-				if err != nil {
-					return err
+				if colType := ColumnTypeFromString(kStr); colType != UnknownColumnType {
+					return nil, ErrorColumnTypeInOutputType(kStr)
+				}
+				if _, err := CompoundTypeFromString(kStr); err == nil {
+					return nil, ErrorCompoundTypeInOutputType(kStr)
 				}
 			}
-			err := ValidateValueType(val)
+		}
+
+		// Generic map
+		if typeValue != nil {
+			if len(typeSchemaMap) != 1 {
+				return nil, ErrorGenericTypeMapLength(typeSchemaMap)
+			}
+			valueOutputTypeSchema, err := ValidateOutputTypeSchema(typeValue)
 			if err != nil {
-				return errors.Wrap(err, s.UserStrStripped(key))
+				return nil, errors.Wrap(err, string(typeKey))
 			}
+			return map[interface{}]interface{}{typeKey: valueOutputTypeSchema}, nil
 		}
-		return nil
-	}
 
-	return ErrorInvalidValueDataType(valueType)
-}
+		// Fixed map
+		castedTypeSchemaMap := map[interface{}]interface{}{}
+		for key, value := range typeSchemaMap {
+			if !cast.IsScalarType(key) {
+				return nil, configreader.ErrorInvalidPrimitiveType(key, configreader.PrimTypeScalars...)
+			}
+			if keyStr, ok := key.(string); ok {
+				if strings.HasPrefix(keyStr, "_") {
+					return nil, ErrorUserKeysCannotStartWithUnderscore(keyStr)
+				}
+			}
 
-func ValidateArgValues(argValues map[string]interface{}) error {
-	for argName, value := range argValues {
-		err := ValidateValue(value)
-		if err != nil {
-			return errors.Wrap(err, argName)
+			valueOutputTypeSchema, err := ValidateOutputTypeSchema(value)
+			if err != nil {
+				return nil, errors.Wrap(err, s.UserStrStripped(key))
+			}
+			castedTypeSchemaMap[key] = valueOutputTypeSchema
 		}
+		return castedTypeSchemaMap, nil
 	}
-	return nil
+
+	return nil, ErrorInvalidOutputType(outputTypeSchemaInter)
 }
 
-func ValidateValue(value interface{}) error {
-	return nil
-}
-
-func CastValue(value interface{}, valueType interface{}) (interface{}, error) {
-	err := ValidateValueType(valueType)
-	if err != nil {
-		return nil, err
-	}
-	err = ValidateValue(value)
-	if err != nil {
-		return nil, err
-	}
-
+// typeSchema is a validated output type schema
+func CastConstant(value interface{}, outputTypeSchema interface{}) (interface{}, error) {
+	// Check for missing
 	if value == nil {
-		return nil, nil
+		return nil, ErrorMustBeDefined(outputTypeSchema)
 	}
 
-	if valueTypeStr, ok := valueType.(string); ok {
-		validTypes := strings.Split(valueTypeStr, "|")
-		var validTypeNames []configreader.PrimitiveType
-
-		if slices.HasString(validTypes, IntegerValueType.String()) {
-			validTypeNames = append(validTypeNames, configreader.PrimTypeInt)
-			valueInt, ok := cast.InterfaceToInt64(value)
-			if ok {
-				return valueInt, nil
-			}
-		}
-		if slices.HasString(validTypes, FloatValueType.String()) {
-			validTypeNames = append(validTypeNames, configreader.PrimTypeFloat)
-			valueFloat, ok := cast.InterfaceToFloat64(value)
-			if ok {
-				return valueFloat, nil
-			}
-		}
-		if slices.HasString(validTypes, StringValueType.String()) {
-			validTypeNames = append(validTypeNames, configreader.PrimTypeString)
-			if valueStr, ok := value.(string); ok {
-				return valueStr, nil
-			}
-		}
-		if slices.HasString(validTypes, BoolValueType.String()) {
-			validTypeNames = append(validTypeNames, configreader.PrimTypeBool)
-			if valueBool, ok := value.(bool); ok {
-				return valueBool, nil
-			}
-		}
-		return nil, configreader.ErrorInvalidPrimitiveType(value, validTypeNames...)
+	// ValueType
+	if valueType, ok := outputTypeSchema.(ValueType); ok {
+		return valueType.CastValue(value)
 	}
 
-	if valueTypeMap, ok := cast.InterfaceToInterfaceInterfaceMap(valueType); ok {
+	// Array
+	if typeSchemas, ok := cast.InterfaceToInterfaceSlice(outputTypeSchema); ok {
+		values, ok := cast.InterfaceToInterfaceSlice(value)
+		if !ok {
+			return nil, ErrorUnsupportedLiteralType(value, outputTypeSchema)
+		}
+		valuesCasted := make([]interface{}, len(values))
+		for i, valueItem := range values {
+			valueItemCasted, err := CastConstant(valueItem, typeSchemas[0])
+			if err != nil {
+				return nil, errors.Wrap(err, s.Index(i))
+			}
+			valuesCasted[i] = valueItemCasted
+		}
+		return valuesCasted, nil
+	}
+
+	// Map
+	if typeSchemaMap, ok := cast.InterfaceToInterfaceInterfaceMap(outputTypeSchema); ok {
 		valueMap, ok := cast.InterfaceToInterfaceInterfaceMap(value)
 		if !ok {
-			return nil, configreader.ErrorInvalidPrimitiveType(value, configreader.PrimTypeMap)
+			return nil, ErrorUnsupportedLiteralType(value, outputTypeSchema)
 		}
 
-		if len(valueTypeMap) == 0 {
-			if len(valueMap) == 0 {
-				return make(map[interface{}]interface{}), nil
-			}
-			return nil, errors.Wrap(configreader.ErrorMustBeEmpty(), s.UserStr(valueMap))
-		}
-
-		isGenericMap := false
-		var genericMapKeyType string
-		var genericMapValueType interface{}
-		if len(valueTypeMap) == 1 {
-			for valueTypeKey, valueTypeVal := range valueTypeMap { // Will only be length one
-				if valueTypeKeyStr, ok := valueTypeKey.(string); ok {
-					if isValidValueType(valueTypeKeyStr) {
-						isGenericMap = true
-						genericMapKeyType = valueTypeKeyStr
-						genericMapValueType = valueTypeVal
-					}
-				}
+		isGeneric := false
+		var genericKey ValueType
+		var genericValue interface{}
+		for k, v := range typeSchemaMap {
+			ok := false
+			if genericKey, ok = k.(ValueType); ok {
+				isGeneric = true
+				genericValue = v
 			}
 		}
 
-		if isGenericMap {
-			valueMapCasted := make(map[interface{}]interface{}, len(valueMap))
+		valueMapCasted := make(map[interface{}]interface{}, len(valueMap))
+
+		// Generic map
+		if isGeneric {
 			for valueKey, valueVal := range valueMap {
-				valueKeyCasted, err := CastValue(valueKey, genericMapKeyType)
+				valueKeyCasted, err := CastConstant(valueKey, genericKey)
 				if err != nil {
 					return nil, err
 				}
-				valueValCasted, err := CastValue(valueVal, genericMapValueType)
+				valueValCasted, err := CastConstant(valueVal, genericValue)
 				if err != nil {
 					return nil, errors.Wrap(err, s.UserStrStripped(valueKey))
 				}
@@ -339,163 +183,327 @@ func CastValue(value interface{}, valueType interface{}) (interface{}, error) {
 			return valueMapCasted, nil
 		}
 
-		// Non-generic map
-		valueMapCasted := make(map[interface{}]interface{}, len(valueMap))
-		for valueKey, valueType := range valueTypeMap {
-			valueVal, ok := valueMap[valueKey]
-			if !ok {
-				return nil, errors.Wrap(configreader.ErrorMustBeDefined(), s.UserStrStripped(valueKey))
-			}
-			valueValCasted, err := CastValue(valueVal, valueType)
+		// Fixed map
+		for typeSchemaKey, typeSchemaValue := range typeSchemaMap {
+			valueValCasted, err := CastConstant(valueMap[typeSchemaKey], typeSchemaValue)
 			if err != nil {
-				return nil, errors.Wrap(err, s.UserStrStripped(valueKey))
+				return nil, errors.Wrap(err, s.UserStrStripped(typeSchemaKey))
 			}
-			valueMapCasted[valueKey] = valueValCasted
+			valueMapCasted[typeSchemaKey] = valueValCasted
 		}
 		for valueKey := range valueMap {
-			if _, ok := valueTypeMap[valueKey]; !ok {
-				return nil, configreader.ErrorUnsupportedKey(valueKey)
+			if _, ok := typeSchemaMap[valueKey]; !ok {
+				return nil, ErrorUnsupportedLiteralMapKey(valueKey, typeSchemaMap)
 			}
 		}
 		return valueMapCasted, nil
 	}
 
-	if valueTypeStrs, ok := cast.InterfaceToStrSlice(valueType); ok {
-		valueTypeStr := valueTypeStrs[0]
-		valueSlice, ok := cast.InterfaceToInterfaceSlice(value)
-		if !ok {
-			return nil, configreader.ErrorInvalidPrimitiveType(value, configreader.PrimTypeList)
-		}
-		valueSliceCasted := make([]interface{}, len(valueSlice))
-		for i, valueItem := range valueSlice {
-			valueItemCasted, err := CastValue(valueItem, valueTypeStr)
-			if err != nil {
-				return nil, errors.Wrap(err, s.Index(i))
-			}
-			valueSliceCasted[i] = valueItemCasted
-		}
-		return valueSliceCasted, nil
-	}
-
-	return nil, ErrorInvalidValueDataType(valueType) // unexpected
+	return nil, ErrorInvalidOutputType(outputTypeSchema) // unexpected
 }
 
-func CheckArgRuntimeTypesMatch(argRuntimeTypes map[string]interface{}, argSchemaTypes map[string]interface{}) error {
-	err := ValidateArgTypes(argSchemaTypes)
-	if err != nil {
-		return err
-	}
-	err = ValidateArgTypes(argRuntimeTypes)
-	if err != nil {
-		return err
-	}
+type InputSchema struct {
+	Type     interface{} `json:"_type" yaml:"_type"` // CompundType, length-one array of *InputSchema, or map of {scalar|CompoundType -> *InputSchema}
+	Optional bool        `json:"_optional" yaml:"_optional"`
+	Default  interface{} `json:"_default" yaml:"_default"`
+	MinCount *int64      `json:"_min_count" yaml:"_min_count"`
+	MaxCount *int64      `json:"_max_count" yaml:"_max_count"`
+}
 
-	for argName, argSchemaType := range argSchemaTypes {
-		if len(argRuntimeTypes) == 0 {
-			return configreader.ErrorMapMustBeDefined(maps.InterfaceMapKeys(argSchemaTypes)...)
-		}
-
-		argRuntimeType, ok := argRuntimeTypes[argName]
-		if !ok {
-			return errors.Wrap(configreader.ErrorMustBeDefined(), argName)
-		}
-		err := CheckValueRuntimeTypesMatch(argRuntimeType, argSchemaType)
+// Returns CompundType, length-one array of *InputSchema, or map of {scalar|CompoundType -> *InputSchema}
+func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, error) {
+	// String
+	if typeSchemaStr, ok := inputTypeSchemaInter.(string); ok {
+		compoundType, err := CompoundTypeFromString(typeSchemaStr)
 		if err != nil {
-			return errors.Wrap(err, argName)
+			return nil, err
+		}
+		return compoundType, nil
+	}
+
+	// List
+	if typeSchemaSlice, ok := cast.InterfaceToInterfaceSlice(inputTypeSchemaInter); ok {
+		if len(typeSchemaSlice) != 1 {
+			return nil, ErrorTypeListLength(typeSchemaSlice)
+		}
+		elementInputSchema, err := ValidateInputSchema(typeSchemaSlice[0])
+		if err != nil {
+			return nil, errors.Wrap(err, s.Index(0))
+		}
+		return []interface{}{elementInputSchema}, nil
+	}
+
+	// Map
+	if typeSchemaMap, ok := cast.InterfaceToInterfaceInterfaceMap(inputTypeSchemaInter); ok {
+		if len(typeSchemaMap) == 0 {
+			return nil, ErrorTypeMapZeroLength(typeSchemaMap)
+		}
+
+		var typeKey CompoundType
+		var typeValue interface{}
+		for k, v := range typeSchemaMap {
+			var err error
+			typeKey, err = CompoundTypeFromString(k)
+			if err == nil {
+				typeValue = v
+				break
+			}
+		}
+
+		// Generic map
+		if typeValue != nil {
+			if len(typeSchemaMap) != 1 {
+				return nil, ErrorGenericTypeMapLength(typeSchemaMap)
+			}
+			valueInputSchema, err := ValidateInputSchema(typeValue)
+			if err != nil {
+				return nil, errors.Wrap(err, string(typeKey))
+			}
+			return map[interface{}]interface{}{typeKey: valueInputSchema}, nil
+		}
+
+		// Fixed map
+		castedTypeSchemaMap := map[interface{}]interface{}{}
+		for key, value := range typeSchemaMap {
+			if !cast.IsScalarType(key) {
+				return nil, configreader.ErrorInvalidPrimitiveType(key, configreader.PrimTypeScalars...)
+			}
+			if keyStr, ok := key.(string); ok {
+				if strings.HasPrefix(keyStr, "_") {
+					return nil, ErrorUserKeysCannotStartWithUnderscore(keyStr)
+				}
+			}
+
+			valueInputSchema, err := ValidateInputSchema(value)
+			if err != nil {
+				return nil, errors.Wrap(err, s.UserStrStripped(key))
+			}
+			castedTypeSchemaMap[key] = valueInputSchema
+		}
+		return castedTypeSchemaMap, nil
+	}
+
+	return nil, ErrorInvalidInputType(inputTypeSchemaInter)
+}
+
+// Returns InputSchema
+func ValidateInputSchema(inputSchemaInter interface{}) (*InputSchema, error) {
+	// Check for cortex options vs short form
+	if inputSchemaMap, ok := cast.InterfaceToStrInterfaceMap(inputSchemaInter); ok {
+		foundUnderscore, foundNonUnderscore := false, false
+		for key := range inputSchemaMap {
+			if strings.HasPrefix(key, "_") {
+				foundUnderscore = true
+			} else {
+				foundNonUnderscore = true
+			}
+		}
+
+		if foundUnderscore {
+			if foundNonUnderscore {
+				return nil, ErrorMixedInputArgOptionsAndUserKeys()
+			}
+
+			inputSchemaValidation := &cr.StructValidation{
+				StructFieldValidations: []*cr.StructFieldValidation{
+					{
+						StructField: "Type",
+						InterfaceValidation: &cr.InterfaceValidation{
+							Required:  true,
+							Validator: validateInputTypeSchema,
+						},
+					},
+					{
+						StructField:    "Optional",
+						BoolValidation: &cr.BoolValidation{},
+					},
+					{
+						StructField:         "Default",
+						InterfaceValidation: &cr.InterfaceValidation{},
+					},
+					{
+						StructField: "MinCount",
+						Int64PtrValidation: &cr.Int64PtrValidation{
+							GreaterThanOrEqualTo: pointer.Int64(0),
+						},
+					},
+					{
+						StructField: "MaxCount",
+						Int64PtrValidation: &cr.Int64PtrValidation{
+							GreaterThanOrEqualTo: pointer.Int64(0),
+						},
+					},
+				},
+			}
+			inputSchema := &InputSchema{}
+			errs := cr.Struct(inputSchema, inputSchemaMap, inputSchemaValidation)
+
+			if errors.HasErrors(errs) {
+				return nil, errors.FirstError(errs...)
+			}
+
+			if err := validateInputSchemaOptions(inputSchema); err != nil {
+				return nil, err
+			}
+
+			return inputSchema, nil
 		}
 	}
 
-	for argName := range argRuntimeTypes {
-		if _, ok := argSchemaTypes[argName]; !ok {
-			return configreader.ErrorUnsupportedKey(argName)
+	typeSchema, err := validateInputTypeSchema(inputSchemaInter)
+	if err != nil {
+		return nil, err
+	}
+	inputSchema := &InputSchema{
+		Type: typeSchema,
+	}
+
+	if err := validateInputSchemaOptions(inputSchema); err != nil {
+		return nil, err
+	}
+
+	return inputSchema, nil
+}
+
+func validateInputSchemaOptions(inputSchema *InputSchema) error {
+	if inputSchema.Default != nil {
+		inputSchema.Optional = true
+	}
+
+	_, isSlice := cast.InterfaceToInterfaceSlice(inputSchema.Type)
+	isGenericMap := false
+	if interfaceMap, ok := cast.InterfaceToInterfaceInterfaceMap(inputSchema.Type); ok {
+		for k := range interfaceMap {
+			_, isGenericMap = k.(CompoundType)
+			break
+		}
+	}
+
+	if inputSchema.MinCount != nil {
+		if !isGenericMap && !isSlice {
+			return ErrorOptionOnNonIterable(MinCountOptKey)
+		}
+	}
+
+	if inputSchema.MaxCount != nil {
+		if !isGenericMap && !isSlice {
+			return ErrorOptionOnNonIterable(MaxCountOptKey)
+		}
+	}
+
+	if inputSchema.MinCount != nil && inputSchema.MaxCount != nil && *inputSchema.MinCount > *inputSchema.MaxCount {
+		return ErrorMinCountGreaterThanMaxCount()
+	}
+
+	// Validate default against schema
+	if inputSchema.Default != nil {
+		var err error
+		inputSchema.Default, err = CastInputDefault(inputSchema.Default, inputSchema)
+		if err != nil {
+			return errors.Wrap(err, DefaultOptKey)
 		}
 	}
 
 	return nil
 }
 
-func CheckValueRuntimeTypesMatch(runtimeType interface{}, schemaType interface{}) error {
-	if schemaTypeStr, ok := schemaType.(string); ok {
-		validTypes := strings.Split(schemaTypeStr, "|")
-		runtimeTypeStr, ok := runtimeType.(string)
-		if !ok {
-			return ErrorUnsupportedDataType(runtimeType, schemaTypeStr)
+func CastInputDefault(value interface{}, inputSchema *InputSchema) (interface{}, error) {
+	// Check for missing
+	if value == nil {
+		if inputSchema.Optional {
+			return inputSchema.Default, nil
 		}
-		for _, runtimeTypeOption := range strings.Split(runtimeTypeStr, "|") {
-			if !slices.HasString(validTypes, runtimeTypeOption) {
-				return ErrorUnsupportedDataType(runtimeTypeStr, schemaTypeStr)
-			}
-		}
-		return nil
+		return nil, ErrorMustBeDefined(inputSchema)
 	}
 
-	if schemaTypeMap, ok := cast.InterfaceToInterfaceInterfaceMap(schemaType); ok {
-		runtimeTypeMap, ok := cast.InterfaceToInterfaceInterfaceMap(runtimeType)
+	typeSchema := inputSchema.Type
+
+	// CompoundType
+	if compoundType, ok := typeSchema.(CompoundType); ok {
+		return compoundType.CastValue(value)
+	}
+
+	// array of *InputSchema
+	if inputSchemas, ok := cast.InterfaceToInterfaceSlice(typeSchema); ok {
+		values, ok := cast.InterfaceToInterfaceSlice(value)
 		if !ok {
-			return ErrorUnsupportedDataType(runtimeType, schemaTypeMap)
+			return nil, ErrorUnsupportedLiteralType(value, typeSchema)
 		}
 
-		isGenericMap := false
-		var genericMapKeyType string
-		var genericMapValueType interface{}
-		if len(schemaTypeMap) == 1 {
-			for schemaTypeKey, schemaTypeValue := range schemaTypeMap { // Will only be length one
-				if schemaTypeMapStr, ok := schemaTypeKey.(string); ok {
-					if isValidValueType(schemaTypeMapStr) {
-						isGenericMap = true
-						genericMapKeyType = schemaTypeMapStr
-						genericMapValueType = schemaTypeValue
-					}
-				}
-			}
+		if inputSchema.MinCount != nil && int64(len(values)) < *inputSchema.MinCount {
+			return nil, ErrorTooFewElements(configreader.PrimTypeList, *inputSchema.MinCount)
+		}
+		if inputSchema.MaxCount != nil && int64(len(values)) > *inputSchema.MaxCount {
+			return nil, ErrorTooManyElements(configreader.PrimTypeList, *inputSchema.MaxCount)
 		}
 
-		if isGenericMap {
-			for runtimeTypeKey, runtimeTypeValue := range runtimeTypeMap { // Should only be one item
-				err := CheckValueRuntimeTypesMatch(runtimeTypeKey, genericMapKeyType)
-				if err != nil {
-					return err
-				}
-				err = CheckValueRuntimeTypesMatch(runtimeTypeValue, genericMapValueType)
-				if err != nil {
-					return errors.Wrap(err, s.UserStrStripped(runtimeTypeKey))
-				}
-			}
-			return nil
-		}
-
-		// Non-generic map
-		for schemaTypeKey, schemaTypeValue := range schemaTypeMap {
-			runtimeTypeValue, ok := runtimeTypeMap[schemaTypeKey]
-			if !ok {
-				return errors.Wrap(configreader.ErrorMustBeDefined(), s.UserStrStripped(schemaTypeKey))
-			}
-			err := CheckValueRuntimeTypesMatch(runtimeTypeValue, schemaTypeValue)
+		valuesCasted := make([]interface{}, len(values))
+		for i, valueItem := range values {
+			valueItemCasted, err := CastInputDefault(valueItem, inputSchemas[0].(*InputSchema))
 			if err != nil {
-				return errors.Wrap(err, s.UserStrStripped(schemaTypeKey))
+				return nil, errors.Wrap(err, s.Index(i))
 			}
+			valuesCasted[i] = valueItemCasted
 		}
-		for runtimeTypeKey := range runtimeTypeMap {
-			if _, ok := schemaTypeMap[runtimeTypeKey]; !ok {
-				return configreader.ErrorUnsupportedKey(runtimeTypeKey)
-			}
-		}
-		return nil
+		return valuesCasted, nil
 	}
 
-	if schemaTypeStrs, ok := cast.InterfaceToStrSlice(schemaType); ok {
-		validTypes := strings.Split(schemaTypeStrs[0], "|")
-		runtimeTypeStrs, ok := cast.InterfaceToStrSlice(runtimeType)
+	// Map
+	if typeSchemaMap, ok := cast.InterfaceToInterfaceInterfaceMap(typeSchema); ok {
+		valueMap, ok := cast.InterfaceToInterfaceInterfaceMap(value)
 		if !ok {
-			return ErrorUnsupportedDataType(runtimeType, schemaTypeStrs)
+			return nil, ErrorUnsupportedLiteralType(value, typeSchema)
 		}
-		for _, runtimeTypeOption := range strings.Split(runtimeTypeStrs[0], "|") {
-			if !slices.HasString(validTypes, runtimeTypeOption) {
-				return ErrorUnsupportedDataType(runtimeTypeStrs, schemaTypeStrs)
+
+		var genericKey CompoundType
+		var genericValue *InputSchema
+		for k, v := range typeSchemaMap {
+			ok := false
+			if genericKey, ok = k.(CompoundType); ok {
+				genericValue = v.(*InputSchema)
 			}
 		}
-		return nil
+
+		valueMapCasted := make(map[interface{}]interface{}, len(valueMap))
+
+		// Generic map
+		if genericValue != nil {
+			if inputSchema.MinCount != nil && int64(len(valueMap)) < *inputSchema.MinCount {
+				return nil, ErrorTooFewElements(configreader.PrimTypeMap, *inputSchema.MinCount)
+			}
+			if inputSchema.MaxCount != nil && int64(len(valueMap)) > *inputSchema.MaxCount {
+				return nil, ErrorTooManyElements(configreader.PrimTypeMap, *inputSchema.MaxCount)
+			}
+
+			for valueKey, valueVal := range valueMap {
+				valueKeyCasted, err := CastInputDefault(valueKey, &InputSchema{Type: genericKey})
+				if err != nil {
+					return nil, err
+				}
+				valueValCasted, err := CastInputDefault(valueVal, genericValue)
+				if err != nil {
+					return nil, errors.Wrap(err, s.UserStrStripped(valueKey))
+				}
+				valueMapCasted[valueKeyCasted] = valueValCasted
+			}
+			return valueMapCasted, nil
+		}
+
+		// Fixed map
+		for typeSchemaKey, typeSchemaValue := range typeSchemaMap {
+			valueValCasted, err := CastInputDefault(valueMap[typeSchemaKey], typeSchemaValue.(*InputSchema))
+			if err != nil {
+				return nil, errors.Wrap(err, s.UserStrStripped(typeSchemaKey))
+			}
+			valueMapCasted[typeSchemaKey] = valueValCasted
+		}
+		for valueKey := range valueMap {
+			if _, ok := typeSchemaMap[valueKey]; !ok {
+				return nil, ErrorUnsupportedLiteralMapKey(valueKey, typeSchemaMap)
+			}
+		}
+		return valueMapCasted, nil
 	}
 
-	return ErrorInvalidValueDataType(schemaType) // unexpected
+	return nil, ErrorInvalidInputType(typeSchema) // unexpected
 }

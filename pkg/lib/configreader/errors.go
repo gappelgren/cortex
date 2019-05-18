@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cortexlabs/cortex/pkg/consts"
 	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 )
 
@@ -51,7 +52,7 @@ const (
 	ErrMustBeDefined
 	ErrMapMustBeDefined
 	ErrMustBeEmpty
-	ErrNotAFile
+	ErrCortexResourceNotAllowed
 )
 
 var errorKinds = []string{
@@ -80,10 +81,10 @@ var errorKinds = []string{
 	"err_must_be_defined",
 	"err_map_must_be_defined",
 	"err_must_be_empty",
-	"err_not_a_file",
+	"err_cortex_resource_not_allowed",
 }
 
-var _ = [1]int{}[int(ErrNotAFile)-(len(errorKinds)-1)] // Ensure list length matches
+var _ = [1]int{}[int(ErrCortexResourceNotAllowed)-(len(errorKinds)-1)] // Ensure list length matches
 
 func (t ErrorKind) String() string {
 	return errorKinds[t]
@@ -298,5 +299,12 @@ func ErrorMustBeEmpty() error {
 	return Error{
 		Kind:    ErrMustBeEmpty,
 		message: "must be empty",
+	}
+}
+
+func ErrorCortexResourceNotAllowed(resourceName string) error {
+	return Error{
+		Kind:    ErrCortexResourceNotAllowed,
+		message: fmt.Sprintf("%s: cortex resource references are not allowed in this context", consts.AddCortexResourceIdentifier(resourceName)),
 	}
 }
