@@ -90,10 +90,6 @@ func (constant *Constant) Validate() error {
 	return nil
 }
 
-func (constant *Constant) GetType() interface{} {
-	return constant.Type
-}
-
 func (constant *Constant) GetResourceType() resource.Type {
 	return resource.ConstantType
 }

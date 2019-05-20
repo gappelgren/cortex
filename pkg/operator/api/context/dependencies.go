@@ -180,7 +180,7 @@ func (ctx *Context) extractCortexResourcesHelper(
 
 	if resourceName, ok := yaml.ExtractAtSymbolText(input); ok {
 		for _, res := range AllResourcesByName(resourceName) {
-			if len(resourceTypeMap) == 0 || resourceTypeMap[res.GetType()] == true {
+			if len(resourceTypeMap) == 0 || resourceTypeMap[res.GetResourceType()] == true {
 				resources[res.GetID()] = res
 			}
 		}

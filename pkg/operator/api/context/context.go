@@ -64,11 +64,6 @@ type ComputedResource interface {
 	SetWorkloadID(string)
 }
 
-type ValueResource interface {
-	Resource
-	GetType() interface{}
-}
-
 type ResourceFields struct {
 	ID           string        `json:"id"`
 	IDWithTags   string        `json:"id_with_tags"`

@@ -17,7 +17,6 @@ limitations under the License.
 package context
 
 import (
-	"github.com/cortexlabs/cortex/pkg/lib/cast"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
 )
 
@@ -29,14 +28,8 @@ type TransformedColumn struct {
 	Type userconfig.ColumnType `json:"type"`
 }
 
-func (column *TransformedColumn) GetType() userconfig.ColumnType {
+func (column *TransformedColumn) GetColumnType() userconfig.ColumnType {
 	return column.Type
-}
-
-// Returns map[string]string because after autogen, arg values are constant or aggregate names
-func (column *TransformedColumn) Args() map[string]string {
-	args, _ := cast.InterfaceToStrStrMap(column.Inputs.Args)
-	return args
 }
 
 func (columns TransformedColumns) OneByID(id string) *TransformedColumn {

@@ -91,8 +91,8 @@ func validateInputRuntimeTypes(
 			return inputCasted, nil
 		case resource.RawColumnType:
 			rawColumn := res.(context.RawColumn)
-			if rawColumn.GetType() != nil {
-				if err := validateInputRuntimeOutputTypes(rawColumn.GetType(), schema); err != nil {
+			if rawColumn.GetColumnType() != userconfig.UnknownColumnType {
+				if err := validateInputRuntimeOutputTypes(rawColumn.GetColumnType(), schema); err != nil {
 					return nil, errors.Wrap(err, userconfig.Identify(rawColumn), userconfig.TypeKey)
 				}
 			}
@@ -109,7 +109,7 @@ func validateInputRuntimeTypes(
 		case resource.TransformedColumnType:
 			transformedColumn := res.(context.TransformedColumn)
 			transformer, _ := getTransformer(transformedColumn.Transformer, userTransformers)
-			if transformer.OutputType != nil {
+			if transformer.OutputType != userconfig.UnknownColumnType {
 				if err := validateInputRuntimeOutputTypes(transformer.OutputType, schema); err != nil {
 					return nil, errors.Wrap(err, userconfig.Identify(transformedColumn), userconfig.Identify(transformer), userconfig.OutputTypeKey)
 				}

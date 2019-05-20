@@ -51,7 +51,7 @@ func getModels(
 			return nil, errors.Wrap(err, userconfig.Identify(modelConfig), userconfig.PathKey)
 		}
 
-		targetDataType := columns[modelConfig.TargetColumn].GetType()
+		targetDataType := columns[modelConfig.TargetColumn].GetColumnType()
 		err = context.ValidateModelTargetType(targetDataType, modelConfig.Type)
 		if err != nil {
 			return nil, errors.Wrap(err, userconfig.Identify(modelConfig))

@@ -25,7 +25,7 @@ type Columns map[string]Column
 
 type Column interface {
 	ComputedResource
-	GetType() userconfig.ColumnType
+	GetColumnType() userconfig.ColumnType
 	IsRaw() bool
 	GetInputRawColumnNames() []string
 }

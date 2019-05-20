@@ -23,7 +23,7 @@ import (
 
 type RawColumn interface {
 	Column
-	GetType() ColumnType
+	GetColumnType() ColumnType
 	GetCompute() *SparkCompute
 	GetUserConfig() Resource
 }
@@ -212,15 +212,15 @@ func (rawColumns RawColumns) Get(name string) RawColumn {
 	return nil
 }
 
-func (column *RawIntColumn) GetType() ColumnType {
+func (column *RawIntColumn) GetColumnType() ColumnType {
 	return column.Type
 }
 
-func (column *RawFloatColumn) GetType() ColumnType {
+func (column *RawFloatColumn) GetColumnType() ColumnType {
 	return column.Type
 }
 
-func (column *RawStringColumn) GetType() ColumnType {
+func (column *RawStringColumn) GetColumnType() ColumnType {
 	return column.Type
 }
 
