@@ -51,7 +51,7 @@ const (
 	ErrDuplicateTypeInTypeString
 	ErrCannotMixValueAndColumnTypes
 	ErrColumnTypeLiteral
-	ErrColumnTypeInOutputType
+	ErrColumnTypeNotAllowed
 	ErrCompoundTypeInOutputType
 	ErrUserKeysCannotStartWithUnderscore
 	ErrMixedInputArgOptionsAndUserKeys
@@ -69,8 +69,8 @@ const (
 	ErrTypeMapZeroLength
 	ErrGenericTypeMapLength
 	ErrK8sQuantityMustBeInt
-	ErrRegressionTargetType
-	ErrClassificationTargetType
+	ErrTargetColumnIntOrFloat
+	ErrPredictionKeyOnModelWithEstimator
 	ErrSpecifyOnlyOneMissing
 	ErrImplDoesNotExist
 )
@@ -98,7 +98,7 @@ var errorKinds = []string{
 	"err_duplicate_type_in_type_string",
 	"err_cannot_mix_value_and_column_types",
 	"err_column_type_literal",
-	"err_column_type_in_output_type",
+	"err_column_type_not_allowed",
 	"err_compound_type_in_output_type",
 	"err_user_keys_cannot_start_with_underscore",
 	"err_mixed_input_arg_options_and_user_keys",
@@ -116,8 +116,8 @@ var errorKinds = []string{
 	"err_type_map_zero_length",
 	"err_generic_type_map_length",
 	"err_k8s_quantity_must_be_int",
-	"err_regression_target_type",
-	"err_classification_target_type",
+	"err_target_column_int_or_float",
+	"err_prediction_key_on_model_with_estimator",
 	"err_specify_only_one_missing",
 	"err_impl_does_not_exist",
 }
@@ -370,10 +370,10 @@ func ErrorColumnTypeLiteral(provided interface{}) error {
 	}
 }
 
-func ErrorColumnTypeInOutputType(provided interface{}) error {
+func ErrorColumnTypeNotAllowed(provided interface{}) error {
 	return Error{
-		Kind:    ErrColumnTypeInOutputType,
-		message: fmt.Sprintf("%s: column types cannot be used in output type schemas", DataTypeUserStr(provided)),
+		Kind:    ErrColumnTypeNotAllowed,
+		message: fmt.Sprintf("%s: column types cannot be used in this context, only value types are allowed (e.g. INT)", DataTypeUserStr(provided)),
 	}
 }
 
@@ -496,17 +496,17 @@ func ErrorK8sQuantityMustBeInt(quantityStr string) error {
 	}
 }
 
-func ErrorRegressionTargetType() error {
+func ErrorTargetColumnIntOrFloat() error {
 	return Error{
-		Kind:    ErrRegressionTargetType,
-		message: "regression models can only predict float target values",
+		Kind:    ErrTargetColumnIntOrFloat,
+		message: "models can only predict values of type INT_COLUMN (i.e. classification) or FLOAT_COLUMN (i.e. regression)",
 	}
 }
 
-func ErrorClassificationTargetType() error {
+func ErrorPredictionKeyOnModelWithEstimator() error {
 	return Error{
-		Kind:    ErrClassificationTargetType,
-		message: "classification models can only predict integer target values (i.e. {0, 1, ..., num_classes-1})",
+		Kind:    ErrPredictionKeyOnModelWithEstimator,
+		message: fmt.Sprintf("models which use a pre-defined \"%s\" cannot define \"%s\" themselves (\"%s\" should be defined on the \"%s\", not the \"%s\")", EstimatorKey, PredictionKeyKey, PredictionKeyKey, resource.EstimatorType.String(), resource.ModelType.String()),
 	}
 }
 

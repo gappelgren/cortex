@@ -18,6 +18,7 @@ package userconfig
 
 import (
 	"github.com/cortexlabs/cortex/pkg/lib/configreader"
+	"github.com/cortexlabs/cortex/pkg/lib/errors"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 )
 
@@ -52,7 +53,13 @@ var aggregateValidation = &configreader.StructValidation{
 			StructField:         "AggregatorPath",
 			StringPtrValidation: &configreader.StringPtrValidation{},
 		},
-		inputValueFieldValidation,
+		{
+			StructField: "Input",
+			InterfaceValidation: &configreader.InterfaceValidation{
+				Required:             true,
+				AllowCortexResources: true,
+			},
+		},
 		sparkComputeFieldValidation("Compute"),
 		tagsFieldValidation,
 		typeFieldValidation,
@@ -60,6 +67,12 @@ var aggregateValidation = &configreader.StructValidation{
 }
 
 func (aggregates Aggregates) Validate() error {
+	for _, aggregate := range aggregates {
+		if err := aggregate.Validate(); err != nil {
+			return err
+		}
+	}
+
 	resources := make([]Resource, len(aggregates))
 	for i, res := range aggregates {
 		resources[i] = res
@@ -68,6 +81,18 @@ func (aggregates Aggregates) Validate() error {
 	dups := FindDuplicateResourceName(resources...)
 	if len(dups) > 0 {
 		return ErrorDuplicateResourceName(dups...)
+	}
+
+	return nil
+}
+
+func (aggregate *Aggregate) Validate() error {
+	if aggregate.AggregatorPath == nil && aggregate.Aggregator == "" {
+		return errors.Wrap(ErrorSpecifyOnlyOneMissing("aggregator", "aggregator_path"), Identify(aggregate))
+	}
+
+	if aggregate.AggregatorPath != nil && aggregate.Aggregator != "" {
+		return errors.Wrap(ErrorSpecifyOnlyOne("aggregator", "aggregator_path"), Identify(aggregate))
 	}
 
 	return nil

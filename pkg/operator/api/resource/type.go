@@ -31,9 +31,10 @@ const (
 	AggregateType                     // 4
 	APIType                           // 5
 	ModelType                         // 6
-	EnvironmentType                   // 8
-	AggregatorType                    // 9
-	TransformerType                   // 10
+	EnvironmentType                   // 7
+	AggregatorType                    // 8
+	TransformerType                   // 9
+	EstimatorType                     // 10
 	TemplateType                      // 11
 	EmbedType                         // 12
 	TrainingDatasetType               // 13

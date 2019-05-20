@@ -48,6 +48,13 @@ var transformerValidation = &cr.StructValidation{
 			},
 		},
 		{
+			StructField: "Input",
+			InterfaceValidation: &cr.InterfaceValidation{
+				Required:  true,
+				Validator: inputSchemaValidator,
+			},
+		},
+		{
 			StructField: "OutputType",
 			StringValidation: &cr.StringValidation{
 				Required:      true,
@@ -57,7 +64,6 @@ var transformerValidation = &cr.StructValidation{
 				return ColumnTypeFromString(str), nil
 			},
 		},
-		inputSchemaFieldValidation,
 		typeFieldValidation,
 	},
 }

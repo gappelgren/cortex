@@ -56,7 +56,13 @@ var aggregatorValidation = &cr.StructValidation{
 				},
 			},
 		},
-		inputSchemaFieldValidation,
+		{
+			StructField: "Input",
+			InterfaceValidation: &cr.InterfaceValidation{
+				Required:  true,
+				Validator: inputSchemaValidator,
+			},
+		},
 		typeFieldValidation,
 	},
 }

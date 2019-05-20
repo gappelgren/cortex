@@ -42,6 +42,7 @@ type Config struct {
 	APIs               APIs               `json:"apis" yaml:"apis"`
 	Aggregators        Aggregators        `json:"aggregators" yaml:"aggregators"`
 	Transformers       Transformers       `json:"transformers" yaml:"transformers"`
+	Estimators         Estimators         `json:"estimators" yaml:"estimators"`
 	Constants          Constants          `json:"constants" yaml:"constants"`
 	Templates          Templates          `json:"templates" yaml:"templates"`
 	Embeds             Embeds             `json:"embeds" yaml:"embeds"`
@@ -62,6 +63,7 @@ func mergeConfigs(target *Config, source *Config) error {
 	target.APIs = append(target.APIs, source.APIs...)
 	target.Aggregators = append(target.Aggregators, source.Aggregators...)
 	target.Transformers = append(target.Transformers, source.Transformers...)
+	target.Estimators = append(target.Estimators, source.Estimators...)
 	target.Constants = append(target.Constants, source.Constants...)
 	target.Templates = append(target.Templates, source.Templates...)
 	target.Embeds = append(target.Embeds, source.Embeds...)
@@ -122,6 +124,11 @@ func (config *Config) ValidatePartial() error {
 			return err
 		}
 	}
+	if config.Estimators != nil {
+		if err := config.Estimators.Validate(); err != nil {
+			return err
+		}
+	}
 	if config.Constants != nil {
 		if err := config.Constants.Validate(); err != nil {
 			return err
@@ -179,33 +186,6 @@ func (config *Config) Validate(envName string) error {
 		}
 	}
 
-	// Check model columns exist
-	columnNames := config.ColumnNames()
-	for _, model := range config.Models {
-		if !slices.HasString(columnNames, model.TargetColumn) {
-			return errors.Wrap(ErrorUndefinedResource(model.TargetColumn, resource.RawColumnType, resource.TransformedColumnType),
-				Identify(model), TargetColumnKey)
-		}
-		missingColumnNames := slices.SubtractStrSlice(model.FeatureColumns, columnNames)
-		if len(missingColumnNames) > 0 {
-			return errors.Wrap(ErrorUndefinedResource(missingColumnNames[0], resource.RawColumnType, resource.TransformedColumnType),
-				Identify(model), FeatureColumnsKey)
-		}
-
-		missingAggregateNames := slices.SubtractStrSlice(model.Aggregates, config.Aggregates.Names())
-		if len(missingAggregateNames) > 0 {
-			return errors.Wrap(ErrorUndefinedResource(missingAggregateNames[0], resource.AggregateType),
-				Identify(model), AggregatesKey)
-		}
-
-		// check training columns
-		missingTrainingColumnNames := slices.SubtractStrSlice(model.TrainingColumns, columnNames)
-		if len(missingTrainingColumnNames) > 0 {
-			return errors.Wrap(ErrorUndefinedResource(missingTrainingColumnNames[0], resource.RawColumnType, resource.TransformedColumnType),
-				Identify(model), TrainingColumnsKey)
-		}
-	}
-
 	// Check api models exist
 	modelNames := config.Models.Names()
 	for _, api := range config.APIs {
@@ -218,14 +198,6 @@ func (config *Config) Validate(envName string) error {
 	// Check local aggregators exist or a path to one is defined
 	aggregatorNames := config.Aggregators.Names()
 	for _, aggregate := range config.Aggregates {
-		if aggregate.AggregatorPath == nil && aggregate.Aggregator == "" {
-			return errors.Wrap(ErrorSpecifyOnlyOneMissing("aggregator", "aggregator_path"), Identify(aggregate))
-		}
-
-		if aggregate.AggregatorPath != nil && aggregate.Aggregator != "" {
-			return errors.Wrap(ErrorSpecifyOnlyOne("aggregator", "aggregator_path"), Identify(aggregate))
-		}
-
 		if aggregate.Aggregator != "" &&
 			!strings.Contains(aggregate.Aggregator, ".") &&
 			!slices.HasString(aggregatorNames, aggregate.Aggregator) {
@@ -236,18 +208,20 @@ func (config *Config) Validate(envName string) error {
 	// Check local transformers exist or a path to one is defined
 	transformerNames := config.Transformers.Names()
 	for _, transformedColumn := range config.TransformedColumns {
-		if transformedColumn.TransformerPath == nil && transformedColumn.Transformer == "" {
-			return errors.Wrap(ErrorSpecifyOnlyOneMissing("transformer", "transformer_path"), Identify(transformedColumn))
-		}
-
-		if transformedColumn.TransformerPath != nil && transformedColumn.Transformer != "" {
-			return errors.Wrap(ErrorSpecifyOnlyOne("transformer", "transformer_path"), Identify(transformedColumn))
-		}
-
 		if transformedColumn.Transformer != "" &&
 			!strings.Contains(transformedColumn.Transformer, ".") &&
 			!slices.HasString(transformerNames, transformedColumn.Transformer) {
 			return errors.Wrap(ErrorUndefinedResource(transformedColumn.Transformer, resource.TransformerType), Identify(transformedColumn), TransformerKey)
+		}
+	}
+
+	// Check local estimators exist or a path to one is defined
+	estimatorNames := config.Estimators.Names()
+	for _, model := range config.Models {
+		if model.Estimator != "" &&
+			!strings.Contains(model.Estimator, ".") &&
+			!slices.HasString(estimatorNames, model.Estimator) {
+			return errors.Wrap(ErrorUndefinedResource(model.Estimator, resource.EstimatorType), Identify(model), EstimatorKey)
 		}
 	}
 
@@ -366,6 +340,12 @@ func newPartial(configData interface{}, filePath string, emb *Embed, template *T
 			errs = cr.Struct(newResource, data, transformerValidation)
 			if !errors.HasErrors(errs) {
 				config.Transformers = append(config.Transformers, newResource.(*Transformer))
+			}
+		case resource.EstimatorType:
+			newResource = &Estimator{}
+			errs = cr.Struct(newResource, data, estimatorValidation)
+			if !errors.HasErrors(errs) {
+				config.Estimators = append(config.Estimators, newResource.(*Estimator))
 			}
 		case resource.TemplateType:
 			if emb != nil {

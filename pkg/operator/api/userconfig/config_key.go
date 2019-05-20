@@ -33,6 +33,10 @@ const (
 	TypeKey            = "type"
 	AggregatorKey      = "aggregator"
 	TransformerKey     = "transformer"
+	EstimatorKey       = "estimator"
+	AggregatorPathKey  = "aggregator_path"
+	TransformerPathKey = "transformer_path"
+	EstimatorPathKey   = "estimator_path"
 	PathKey            = "path"
 	ValueKey           = "value"
 	YAMLKey            = "yaml"
@@ -57,4 +61,5 @@ const (
 	DataPartitionRatioKey  = "data_partition_ratio"
 	TrainingKey            = "training"
 	EvaluationKey          = "evaluation"
+	PredictionKeyKey       = "prediction_key"
 )

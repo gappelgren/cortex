@@ -27,6 +27,14 @@ import (
 	s "github.com/cortexlabs/cortex/pkg/lib/strings"
 )
 
+func inputSchemaValidator(inputSchemaInter interface{}) (interface{}, error) {
+	return ValidateInputSchema(inputSchemaInter, false) // This casts it to *InputSchema
+}
+
+func inputSchemaValidatorValueTypesOnly(inputSchemaInter interface{}) (interface{}, error) {
+	return ValidateInputSchema(inputSchemaInter, true) // This casts it to *InputSchema
+}
+
 // Returns ValueType, length-one array of <recursive>, or map of {scalar|ValueType -> <recursive>}
 // Output types cannot have *_COLUMN types, cannot be compound types, and don't have cortex options (e.g. _default)
 // This is used for constants and aggregates
@@ -36,7 +44,7 @@ func ValidateOutputTypeSchema(outputTypeSchemaInter interface{}) (interface{}, e
 		valueType := ValueTypeFromString(typeSchemaStr)
 		if valueType == UnknownValueType {
 			if colType := ColumnTypeFromString(typeSchemaStr); colType != UnknownColumnType {
-				return nil, ErrorColumnTypeInOutputType(typeSchemaStr)
+				return nil, ErrorColumnTypeNotAllowed(typeSchemaStr)
 			}
 			if _, err := CompoundTypeFromString(typeSchemaStr); err == nil {
 				return nil, ErrorCompoundTypeInOutputType(typeSchemaStr)
@@ -74,7 +82,7 @@ func ValidateOutputTypeSchema(outputTypeSchemaInter interface{}) (interface{}, e
 					break
 				}
 				if colType := ColumnTypeFromString(kStr); colType != UnknownColumnType {
-					return nil, ErrorColumnTypeInOutputType(kStr)
+					return nil, ErrorColumnTypeNotAllowed(kStr)
 				}
 				if _, err := CompoundTypeFromString(kStr); err == nil {
 					return nil, ErrorCompoundTypeInOutputType(kStr)
@@ -211,12 +219,15 @@ type InputSchema struct {
 }
 
 // Returns CompundType, length-one array of *InputSchema, or map of {scalar|CompoundType -> *InputSchema}
-func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, error) {
+func validateInputTypeSchema(inputTypeSchemaInter interface{}, disallowColumnTypes bool) (interface{}, error) {
 	// String
 	if typeSchemaStr, ok := inputTypeSchemaInter.(string); ok {
 		compoundType, err := CompoundTypeFromString(typeSchemaStr)
 		if err != nil {
 			return nil, err
+		}
+		if disallowColumnTypes && compoundType.IsColumns() {
+			return nil, ErrorColumnTypeNotAllowed(typeSchemaStr)
 		}
 		return compoundType, nil
 	}
@@ -226,7 +237,7 @@ func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, err
 		if len(typeSchemaSlice) != 1 {
 			return nil, ErrorTypeListLength(typeSchemaSlice)
 		}
-		elementInputSchema, err := ValidateInputSchema(typeSchemaSlice[0])
+		elementInputSchema, err := ValidateInputSchema(typeSchemaSlice[0], disallowColumnTypes)
 		if err != nil {
 			return nil, errors.Wrap(err, s.Index(0))
 		}
@@ -255,7 +266,10 @@ func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, err
 			if len(typeSchemaMap) != 1 {
 				return nil, ErrorGenericTypeMapLength(typeSchemaMap)
 			}
-			valueInputSchema, err := ValidateInputSchema(typeValue)
+			if disallowColumnTypes && typeKey.IsColumns() {
+				return nil, ErrorColumnTypeNotAllowed(typeKey)
+			}
+			valueInputSchema, err := ValidateInputSchema(typeValue, disallowColumnTypes)
 			if err != nil {
 				return nil, errors.Wrap(err, string(typeKey))
 			}
@@ -274,7 +288,7 @@ func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, err
 				}
 			}
 
-			valueInputSchema, err := ValidateInputSchema(value)
+			valueInputSchema, err := ValidateInputSchema(value, disallowColumnTypes)
 			if err != nil {
 				return nil, errors.Wrap(err, s.UserStrStripped(key))
 			}
@@ -287,7 +301,7 @@ func validateInputTypeSchema(inputTypeSchemaInter interface{}) (interface{}, err
 }
 
 // Returns InputSchema
-func ValidateInputSchema(inputSchemaInter interface{}) (*InputSchema, error) {
+func ValidateInputSchema(inputSchemaInter interface{}, disallowColumnTypes bool) (*InputSchema, error) {
 	// Check for cortex options vs short form
 	if inputSchemaMap, ok := cast.InterfaceToStrInterfaceMap(inputSchemaInter); ok {
 		foundUnderscore, foundNonUnderscore := false, false
@@ -309,8 +323,10 @@ func ValidateInputSchema(inputSchemaInter interface{}) (*InputSchema, error) {
 					{
 						StructField: "Type",
 						InterfaceValidation: &cr.InterfaceValidation{
-							Required:  true,
-							Validator: validateInputTypeSchema,
+							Required: true,
+							Validator: func(t interface{}) (interface{}, error) {
+								return validateInputTypeSchema(t, disallowColumnTypes)
+							},
 						},
 					},
 					{
@@ -350,7 +366,7 @@ func ValidateInputSchema(inputSchemaInter interface{}) (*InputSchema, error) {
 		}
 	}
 
-	typeSchema, err := validateInputTypeSchema(inputSchemaInter)
+	typeSchema, err := validateInputTypeSchema(inputSchemaInter, disallowColumnTypes)
 	if err != nil {
 		return nil, err
 	}
