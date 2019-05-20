@@ -17,9 +17,6 @@ limitations under the License.
 package context
 
 import (
-	"sort"
-
-	"github.com/cortexlabs/cortex/pkg/lib/sets/strset"
 	"github.com/cortexlabs/cortex/pkg/operator/api/resource"
 	"github.com/cortexlabs/cortex/pkg/operator/api/userconfig"
 )
@@ -31,8 +28,6 @@ type Model struct {
 	*userconfig.Model
 	*ComputedResourceFields
 	Key     string           `json:"key"`
-	ImplID  string           `json:"impl_id"`
-	ImplKey string           `json:"impl_key"`
 	Dataset *TrainingDataset `json:"dataset"`
 }
 
@@ -74,13 +69,12 @@ func (models Models) GetTrainingDatasets() TrainingDatasets {
 	return trainingDatasets
 }
 
-func (ctx *Context) RawColumnInputNames(model *Model) []string {
-	rawColumnInputNames := strset.New()
-	for _, colName := range model.FeatureColumns {
-		col := ctx.GetColumn(colName)
-		rawColumnInputNames.Add(col.GetInputRawColumnNames()...)
+func (model *Model) GetRawColumnInputs() []RawColumn {
+	combinedInput := []interface{}{model.Input, model.TrainingInput}
+	rawColResources := ExtractCortexResources(combinedInput, resource.RawColumnType)
+	rawCols := make([]RawColumn, rawColResources)
+	for i, rawColResource := range rawColResources {
+		rawCols[i] = rawColResource.(RawColumn)
 	}
-	columnNames := rawColumnInputNames.Slice()
-	sort.Strings(columnNames)
-	return columnNames
+	return rawCols
 }

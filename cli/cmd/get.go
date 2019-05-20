@@ -412,9 +412,8 @@ func describeAPI(name string, resourcesRes *schema.GetResourcesResponse) (string
 
 	out += titleStr("Endpoint")
 	var samplePlaceholderFields []string
-	for _, colName := range ctx.RawColumnInputNames(model) {
-		column := ctx.GetColumn(colName)
-		fieldStr := `"` + colName + `": ` + column.GetColumnType().JSONPlaceholder()
+	for _, column := range model.GetRawColumnInputs() {
+		fieldStr := `"` + column.GetName() + `": ` + column.GetColumnType().JSONPlaceholder()
 		samplePlaceholderFields = append(samplePlaceholderFields, fieldStr)
 	}
 	samplesPlaceholderStr := `{ "samples": [ { ` + strings.Join(samplePlaceholderFields, ", ") + " } ] }"

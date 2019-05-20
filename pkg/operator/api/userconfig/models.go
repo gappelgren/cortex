@@ -325,7 +325,7 @@ func (model *Model) Validate() error {
 	if model.Training.SaveCheckpointsSecs == nil && model.Training.SaveCheckpointsSteps == nil {
 		model.Training.SaveCheckpointsSecs = pointer.Int64(600)
 	} else if model.Training.SaveCheckpointsSecs != nil && model.Training.SaveCheckpointsSteps != nil {
-		return errors.Wrap(ErrorSpecifyOnlyOne(SaveCheckpointSecsKey, SaveCheckpointStepsKey), Identify(model), TrainingKey)
+		return errors.Wrap(ErrorSpecifyOnlyOne(SaveCheckpointsSecsKey, SaveCheckpointsStepsKey), Identify(model), TrainingKey)
 	}
 
 	if model.Training.NumSteps == nil && model.Training.NumEpochs == nil {
