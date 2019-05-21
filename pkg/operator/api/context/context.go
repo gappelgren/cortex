@@ -43,6 +43,7 @@ type Context struct {
 	Constants          Constants            `json:"constants"`
 	Aggregators        Aggregators          `json:"aggregators"`
 	Transformers       Transformers         `json:"transformers"`
+	Estimators         Estimators           `json:"estimators"`
 }
 
 type RawDataset struct {
@@ -155,6 +156,9 @@ func (ctx *Context) AllResources() []Resource {
 	}
 	for _, transformer := range ctx.Transformers {
 		resources = append(resources, transformer)
+	}
+	for _, estimator := range ctx.Estimators {
+		resources = append(resources, estimator)
 	}
 	return resources
 }
